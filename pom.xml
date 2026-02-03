@@ -256,6 +256,7 @@
     <groupId>org.jacoco</groupId>
     <artifactId>jacoco-maven-plugin</artifactId>
     <version>0.8.14</version>
+
     <executions>
         <execution>
             <id>prepare-agent</id>
@@ -270,9 +271,17 @@
             <goals>
                 <goal>report</goal>
             </goals>
+            <configuration>
+                <outputDirectory>${project.reporting.outputDirectory}/jacoco</outputDirectory>
+                <formats>
+                    <format>XML</format>
+                    <format>HTML</format>
+                </formats>
+            </configuration>
         </execution>
     </executions>
 </plugin>
+
       <!-- Spring Boot Actuator displays build-related information if a git.properties file is
       present at the classpath -->
       <plugin>
