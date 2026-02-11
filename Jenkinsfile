@@ -1,66 +1,63 @@
 pipeline {
     agent any
 
-    tools {
-        jdk 'JAVA_HOME'
-        maven 'maven'
-    }
-
-    environment {
-        TOMCAT_HOME = "C:\\Softwares\\apache-tomcat-9.0.112"
-    }
-
     stages {
 
-        stage('1. Checkout') {
+        stage('Clone') {
             steps {
                 git branch: 'main',
-                    url: 'https://github.com/spring-projects/spring-petclinic.git'
+                url: 'https://github.com/spring-projects/spring-petclinic.git'
             }
         }
 
-        stage('2. Build + Test + Coverage') {
+        stage('Build + Test + Coverage') {
             steps {
                 bat 'mvn clean verify'
             }
         }
 
-        stage('3. SonarQube Analysis') {
+        stage('SonarQube Analysis (properties inside pipeline)') {
             steps {
                 withSonarQubeEnv('sonarqube') {
-                    bat 'mvn sonar:sonar'
+                    bat '''
+                    sonar-scanner ^
+                      -Dsonar.projectKey=spring-petclinic ^
+                      -Dsonar.projectName=Spring-PetClinic ^
+                      -Dsonar.projectVersion=1.0 ^
+                      -Dsonar.sources=src/main/java ^
+                      -Dsonar.tests=src/test/java ^
+                      -Dsonar.java.binaries=target/classes ^
+                      -Dsonar.sourceEncoding=UTF-8 ^
+                      -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml
+                    '''
                 }
             }
         }
 
-        stage('4. Quality Gate') {
+        stage('Quality Gate') {
             steps {
-                timeout(time: 5, unit: 'MINUTES') {
+                timeout(time: 10, unit: 'MINUTES') {
                     waitForQualityGate abortPipeline: true
                 }
             }
         }
 
-        stage('5. Package WAR') {
+        stage('Package') {
             steps {
-                bat 'mvn clean package -DskipTests'
+                bat 'mvn package -DskipTests'
             }
         }
 
-        stage('6. Deploy to Tomcat') {
+        stage('Deploy') {
             steps {
                 bat '''
-                echo Stopping Tomcat...
-                call "%TOMCAT_HOME%\\bin\\shutdown.bat"
-                timeout /t 5
+                echo Killing old app on port 8085...
+                for /F "tokens=5" %%a in ('netstat -ano ^| findstr :8085') do taskkill /F /PID %%a >nul 2>&1
 
-                echo Deploying WAR...
-                del /f /q "%TOMCAT_HOME%\\webapps\\petclinic.war"
-                rmdir /s /q "%TOMCAT_HOME%\\webapps\\petclinic"
-                copy target\\*.war "%TOMCAT_HOME%\\webapps\\petclinic.war"
+                echo Starting application...
+                powershell -Command "Start-Process java -ArgumentList '-jar target\\spring-petclinic-4.0.0-SNAPSHOT.jar --server.port=8085' -WindowStyle Hidden"
 
-                echo Starting Tomcat...
-                call "%TOMCAT_HOME%\\bin\\startup.bat"
+                ping 127.0.0.1 -n 16 >nul
                 '''
             }
         }
@@ -68,15 +65,20 @@ pipeline {
 
     post {
         success {
-            mail to: 'elchuriyaswanth2@gmail.com',
-                 subject: "✅ Jenkins Build SUCCESS - PetClinic",
-                 body: "Congratulations Yaswanth 🎉\n\nYour Jenkins pipeline completed successfully!\n\nApplication deployed to Tomcat.\n\n-- Jenkins"
+            emailext(
+                subject: "BUILD SUCCESS",
+                body: "Spring PetClinic pipeline executed successfully",
+                to: "yourmail@gmail.com"
+            )
         }
 
         failure {
-            mail to: 'elchuriyaswanth2@gmail.com',
-                 subject: "❌ Jenkins Build FAILED - PetClinic",
-                 body: "Hi Yaswanth,\n\nYour Jenkins pipeline FAILED.\n\nPlease check console logs.\n\n-- Jenkins"
+            emailext(
+                subject: "BUILD FAILED",
+                body: "Spring PetClinic pipeline failed. Please check Jenkins logs.",
+                to: "yourmail@gmail.com"
+            )
         }
     }
 }
+
